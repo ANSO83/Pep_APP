@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BioTrack Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --primary: #38bdf8;
+            --sec: #10b981;
+            --text: #f1f5f9;
+            --sub: #94a3b8;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding-bottom: 100px; }
+
+        /* Toast notification */
+        #toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-80px);
+            background: #1e293b;
+            color: var(--text);
+            padding: 12px 24px;
+            border-radius: 30px;
+            border: 1px solid #334155;
+            font-size: 0.9rem;
+            z-index: 9999;
+            transition: transform 0.3s ease;
+            text-align: center;
+            max-width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+        #toast.success { border-color: var(--sec); color: var(--sec); }
+        #toast.error { border-color: var(--danger); color: var(--danger); }
+        #toast.info { border-color: var(--primary); color: var(--primary); }
+
+        /* Loading overlay */
+        #loading {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15,23,42,0.85);
+            z-index: 9998;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 15px;
+        }
+        #loading.show { display: flex; }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid #334155;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .header { background: linear-gradient(135deg, #0284c7, #0369a1); padding: 40px 20px; border-radius: 0 0 30px 30px; text-align: center; }
+        .big-w { font-size: 3rem; font-weight: 800; margin: 10px 0; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 20px; margin-top: -20px; }
+        .card { background: var(--card); padding: 15px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 10px; }
+        .card label { color: var(--sub); font-size: 0.7rem; text-transform: uppercase; }
+        .card span { font-size: 1.2rem; font-weight: bold; display: block; color: var(--primary); margin-top: 5px; }
+        .view { padding: 20px; display: none; }
+        .nav { position: fixed; bottom: 0; width: 100%; max-width: 450px; background: #1e293b; display: flex; justify-content: space-around; padding: 15px 0; border-top: 1px solid #334155; z-index: 999; }
+        .nav-i { color: var(--sub); text-align: center; font-size: 0.7rem; cursor: pointer; flex: 1; }
+        .nav-i.active { color: var(--primary); font-weight: bold; }
+        .cam-btn { background: var(--primary); color: #0f172a; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; margin-top: -45px; border: 5px solid var(--bg); font-size: 1.5rem; cursor: pointer; }
+        input, select { width: 100%; padding: 12px; margin-top: 10px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; }
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; color: white; margin-top: 10px; cursor: pointer; }
+
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--sub); }
+        .empty-state i { font-size: 2.5rem; margin-bottom: 10px; display: block; }
+
+        .diff-pos { color: var(--sec); }
+        .diff-neg { color: var(--danger); }
+    </style>
+</head>
+<body>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Loading overlay -->
+<div id="loading">
+    <div class="spinner"></div>
+    <span style="color: var(--sub); font-size:0.9rem">Analisando imagem com IA...</span>
+</div>
+
+<div class="app" style="max-width:450px; margin:auto;">
+    <!-- HOME -->
+    <div id="hView">
+        <div class="header">
+            <span>ANDRESSA • EVOLUÇÃO</span>
+            <div class="big-w" id="dW">-- kg</div>
+            <span id="dD" style="opacity:0.8">Sobe um relatório da galeria</span>
+        </div>
+        <div class="grid">
+            <div class="card"><label>Gordura</label><span id="dG">-- kg</span></div>
+            <div class="card"><label>% Gordura</label><span id="dGP">-- %</span></div>
+            <div class="card"><label>Músculo</label><span id="dM">-- kg</span></div>
+            <div class="card"><label>Visceral</label><span id="dV">--</span></div>
+        </div>
+        <div id="hEmpty" class="empty-state" style="display:none">
+            <i class="fa fa-camera"></i>
+            <p>Toque no botão de câmera abaixo para analisar seu relatório de bioimpedância.</p>
+        </div>
+    </div>
+
+    <!-- GRÁFICOS -->
+    <div id="gView" class="view">
+        <h2>Gráficos</h2>
+        <div class="card"><canvas id="cW"></canvas></div>
+        <div class="card" style="margin-top:12px"><canvas id="cG"></canvas></div>
+    </div>
+
+    <!-- AGENDA -->
+    <div id="aView" class="view">
+        <h2>Agenda</h2>
+        <div class="card">
+            <select id="pS">
+                <option>Tirzepatida</option>
+                <option>BPC-157</option>
+                <option>GHK-Cu</option>
+            </select>
+            <input type="text" id="dI" placeholder="Dose (ex: 5mg)">
+            <input type="date" id="dT">
+            <button class="btn" style="background:var(--sec)" onclick="addD()">Salvar Dose</button>
+        </div>
+        <div id="lD"></div>
+    </div>
+
+    <!-- AJUSTES -->
+    <div id="sView" class="view">
+        <h2>Ajustes</h2>
+        <div class="card">
+            <label>API Key Gemini</label>
+            <input type="password" id="akI" placeholder="AIza...">
+            <button class="btn" style="background:var(--sec)" onclick="sK()">Salvar Chave</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+            <label style="color:var(--sub); font-size:0.7rem; text-transform:uppercase">Total de registros</label>
+            <span id="totalReg" style="font-weight:bold; margin-top:8px; display:block">0 registros</span>
+        </div>
+        <button class="btn" style="background:var(--danger); margin-top:12px" onclick="clr()">Apagar Tudo</button>
+    </div>
+
+    <nav class="nav">
+        <div class="nav-i active" id="btnH" onclick="sw('h')"><i class="fa fa-home"></i><br>Início</div>
+        <div class="nav-i" id="btnG" onclick="sw('g')"><i class="fa fa-chart-line"></i><br>Gráficos</div>
+        <label class="cam-btn">
+            <i class="fa fa-camera"></i>
+            <input type="file" id="fI" hidden onchange="up(event)" accept="image/*">
+        </label>
+        <div class="nav-i" id="btnA" onclick="sw('a')"><i class="fa fa-calendar-check"></i><br>Agenda</div>
+        <div class="nav-i" id="btnS" onclick="sw('s')"><i class="fa fa-gear"></i><br>Ajustes</div>
+    </nav>
+</div>
+
+<script>
+    let db = JSON.parse(localStorage.getItem('b_db')) || [];
+    let ds = JSON.parse(localStorage.getItem('b_ds')) || [];
+
+    // ── Toast helper (substitui alert()) ──────────────────────────────────────
+    function toast(msg, type = 'info', duration = 3000) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = `show ${type}`;
+        clearTimeout(el._t);
+        el._t = setTimeout(() => { el.className = ''; }, duration);
+    }
+
+    // ── Loading helper ────────────────────────────────────────────────────────
+    function setLoading(on) {
+        document.getElementById('loading').classList.toggle('show', on);
+    }
+
+    // ── Navegação ─────────────────────────────────────────────────────────────
+    function sw(v) {
+        ['h','g','a','s'].forEach(x => document.getElementById(x+'View').style.display = 'none');
+        document.getElementById(v+'View').style.display = 'block';
+        document.querySelectorAll('.nav-i').forEach(el => el.classList.remove('active'));
+        document.getElementById('btn'+v.toUpperCase()).classList.add('active');
+        if (v === 'g') rG();
+        if (v === 'a') rD();
+        if (v === 'h') uD();
+        if (v === 's') {
+            document.getElementById('totalReg').textContent = db.length + ' registro(s)';
+        }
+    }
+
+    // ── Upload e análise da imagem ────────────────────────────────────────────
+    async function up(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Reseta o input para permitir re-upload do mesmo arquivo
+        e.target.value = '';
+
+        const key = localStorage.getItem('g_k');
+        if (!key) {
+            toast('Salve sua API Key em Ajustes antes de continuar!', 'error');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const b64 = await resizeToBase64(file);
+
+            // ── FIX PRINCIPAL: modelo correto + URL v1beta ───────────────────
+            const res = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                {
+                                    text: `You are a body composition data extractor.
+Look at this bioimpedance or body composition report image and extract the data.
+Return ONLY a valid JSON object with NO markdown, NO code blocks, NO explanation.
+Format: {"data":"YYYY-MM-DD","peso":number,"gordura_perc":number,"musculo_kg":number,"visceral":number,"tmb":number}
+If a field is not found, use 0.
+The date should be the measurement date from the report, or today if not found.`
+                                },
+                                {
+                                    inline_data: { mime_type: "image/jpeg", data: b64 }
+                                }
+                            ]
+                        }]
+                    })
+                }
+            );
+
+            const json = await res.json();
+
+            // Trata erros da API do Google
+            if (json.error) throw new Error('Google API: ' + json.error.message);
+
+            const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!rawText) throw new Error('Resposta vazia da IA. Tente novamente.');
+
+            // ── FIX: remove markdown antes do parse ─────────────────────────
+            const cleaned = rawText.replace(/```json|```/gi, '').trim();
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start === -1 || end === -1) throw new Error('Formato inválido retornado pela IA.');
+
+            const parsed = JSON.parse(cleaned.substring(start, end + 1));
+
+            // ── FIX: valida campos obrigatórios ─────────────────────────────
+            if (!parsed.peso || parsed.peso === 0) {
+                throw new Error('Não foi possível identificar o peso na imagem. Verifique se é um relatório de bioimpedância.');
+            }
+
+            // Garante data válida
+            if (!parsed.data || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.data)) {
+                parsed.data = new Date().toISOString().split('T')[0];
+            }
+
+            db.push(parsed);
+            db.sort((a, b) => new Date(a.data) - new Date(b.data));
+            localStorage.setItem('b_db', JSON.stringify(db));
+
+            setLoading(false);
+            uD();
+            toast('Relatório salvo com sucesso!', 'success');
+
+        } catch (err) {
+            setLoading(false);
+            toast('Erro: ' + err.message, 'error', 5000);
+            console.error(err);
+        }
+    }
+
+    // ── Redimensiona imagem e retorna base64 ──────────────────────────────────
+    function resizeToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onerror = () => reject(new Error('Imagem inválida.'));
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const maxW = 1024;
+                    const scale = Math.min(1, maxW / img.width);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // ── Atualiza tela home ────────────────────────────────────────────────────
+    function uD() {
+        if (!db.length) {
+            document.getElementById('hEmpty').style.display = 'block';
+            return;
+        }
+        document.getElementById('hEmpty').style.display = 'none';
+
+        const l = db[db.length - 1];
+        const first = db[0];
+        const diff = (l.peso - first.peso).toFixed(1);
+        const diffClass = diff <= 0 ? 'diff-neg' : 'diff-pos';
+        const diffSign = diff > 0 ? '+' : '';
+
+        document.getElementById('dW').innerText = l.peso + ' kg';
+        document.getElementById('dG').innerText = ((l.peso * l.gordura_perc) / 100).toFixed(1) + ' kg';
+        document.getElementById('dGP').innerText = l.gordura_perc + ' %';
+        document.getElementById('dM').innerText = l.musculo_kg + ' kg';
+        document.getElementById('dV').innerText = l.visceral || '--';
+
+        const dEl = document.getElementById('dD');
+        if (db.length > 1) {
+            dEl.innerHTML = `<span class="${diffClass}">${diffSign}${diff} kg</span> desde o início`;
+        } else {
+            dEl.innerText = 'Primeiro registro salvo!';
+        }
+    }
+
+    // ── Agenda ────────────────────────────────────────────────────────────────
+    function addD() {
+        const d = {
+            sub: document.getElementById('pS').value,
+            dose: document.getElementById('dI').value.trim(),
+            data: document.getElementById('dT').value,
+            id: Date.now()
+        };
+        if (!d.dose || !d.data) {
+            toast('Preencha a dose e a data!', 'error');
+            return;
+        }
+        ds.push(d);
+        localStorage.setItem('b_ds', JSON.stringify(ds));
+        document.getElementById('dI').value = '';
+        document.getElementById('dT').value = '';
+        rD();
+        toast('Dose salva!', 'success');
+    }
+
+    function rD() {
+        const c = document.getElementById('lD');
+        if (!ds.length) {
+            c.innerHTML = '<div class="empty-state"><i class="fa fa-calendar-check"></i><p>Nenhuma dose registrada ainda.</p></div>';
+            return;
+        }
+        c.innerHTML = '<h3 style="font-size:0.8rem; margin-top:20px; color:var(--sub)">LOG DE DOSES</h3>';
+        [...ds].sort((a, b) => new Date(b.data) - new Date(a.data)).forEach(x => {
+            const dv = document.createElement('div');
+            dv.innerHTML = `
+                <div style="background:#1e293b; padding:12px 14px; margin-top:8px; border-radius:12px; border-left:4px solid var(--sec); display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong style="color:var(--sec)">${x.sub}</strong>
+                        <span style="color:var(--sub); font-size:0.8rem; margin-left:8px">${x.dose}</span>
+                    </div>
+                    <span style="color:var(--sub); font-size:0.75rem">${x.data}</span>
+                </div>`;
+            c.appendChild(dv);
+        });
+    }
+
+    // ── Gráficos ──────────────────────────────────────────────────────────────
+    function rG() {
+        if (!db.length) return;
+
+        const labels = db.map(x => x.data);
+
+        // Gráfico de Peso
+        const ctxW = document.getElementById('cW').getContext('2d');
+        if (window.chW) window.chW.destroy();
+        window.chW = new Chart(ctxW, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Peso (kg)',
+                    data: db.map(x => x.peso),
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56,189,248,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#38bdf8'
+                }]
+            },
+            options: { plugins: { legend: { labels: { color: '#f1f5f9' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+        });
+
+        // Gráfico de Gordura %
+        const ctxG = document.getElementById('cG').getContext('2d');
+        if (window.chG) window.chG.destroy();
+        window.chG = new Chart(ctxG, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: '% Gordura',
+                        data: db.map(x => x.gordura_perc),
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 5
+                    },
+                    {
+                        label: 'Músculo (kg)',
+                        data: db.map(x => x.musculo_kg),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16,185,129,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 5
+                    }
+                ]
+            },
+            options: { plugins: { legend: { labels: { color: '#f1f5f9' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+        });
+    }
+
+    // ── Ajustes ───────────────────────────────────────────────────────────────
+    function sK() {
+        const k = document.getElementById('akI').value.trim();
+        if (!k) { toast('Cole sua API Key antes de salvar!', 'error'); return; }
+        localStorage.setItem('g_k', k);
+        toast('Chave salva com sucesso!', 'success');
+    }
+
+    function clr() {
+        if (!confirm('Apagar todos os dados? Esta ação não pode ser desfeita.')) return;
+        localStorage.clear();
+        location.reload();
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    window.onload = () => {
+        uD();
+        document.getElementById('akI').value = localStorage.getItem('g_k') || '';
+        // Mostra home por padrão
+        sw('h');
+    };
+</script>
+</body>
+</html>
